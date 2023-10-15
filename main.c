@@ -2,8 +2,9 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <stdint.h>
+#include <string.h>
 
-typedef struct
+typedef struct difference
 {
     size_t offset;
     uint8_t old;
@@ -11,13 +12,13 @@ typedef struct
     struct difference *next;
 } difference_t;
 
-
 size_t getSizeFromFileStream(FILE *fp) {
     if (fp == NULL) {
+        printf("Failed getting size!\n");
         exit(1);
     }
 
-    size_t size;
+    size_t size = 0;
 
     fseek(fp, 0L, SEEK_END);
 
@@ -29,12 +30,15 @@ size_t getSizeFromFileStream(FILE *fp) {
 
 }
 
-uint8_t *readFile(FILE *fp, size_t size) {
+uint8_t *readDataFromFD(FILE *fp) {
     if (fp == NULL) {
+        printf("Failed opening fd for data gathering!\n");
         exit(1);
     }
 
-    uint8_t *buffer = (uint8_t*)malloc(size);
+    size_t size = getSizeFromFileStream(fp);
+
+    uint8_t *buffer = malloc(size);
 
     fseek(fp, 0L, SEEK_SET);
 
@@ -43,14 +47,20 @@ uint8_t *readFile(FILE *fp, size_t size) {
     return buffer;
 }
 
-difference_t *createDifference() {
-    difference_t *diff = (difference_t*)malloc(sizeof(difference_t));
-    diff->next = NULL;
+difference_t *allocateDifference() {
+    difference_t *diff = NULL;
+
+    diff = malloc(sizeof(difference_t));
+
+    if (diff == NULL) {
+        printf("Failed allocating difference!\n");
+    }
+
     return diff;
 }
 
 void freeDifferences(difference_t *differences) {
-    difference_t *pDiff;
+    difference_t *pDiff = NULL;
 
     while (differences != NULL) {
         pDiff = differences;
@@ -64,7 +74,7 @@ difference_t *diff(uint8_t *oldData, uint8_t *newData, size_t size) {
 
     for (size_t i = 0; i < size; i++) {
         if (oldData[i] != newData[i]) {
-            difference_t *diff = createDifference();
+            difference_t *diff = allocateDifference();
 
             diff->offset = i;
             diff->old = oldData[i];
@@ -80,7 +90,7 @@ difference_t *diff(uint8_t *oldData, uint8_t *newData, size_t size) {
 }
 
 void writeDifferencesToPath(const char *path, difference_t *differences) {
-    FILE *fpPath = fopen(path, "w");
+    FILE *fpPath = fopen(path, "wt");
 
     if (fpPath == NULL) {
         printf("Failed to open %s for writing!\n", path);
@@ -97,16 +107,23 @@ void writeDifferencesToPath(const char *path, difference_t *differences) {
 }
 
 difference_t *diffFilesFromPath(const char *oldPath, const char *newPath, const char *diffPath) {
-    FILE *fpOld = fopen(oldPath, "rb");
-    FILE *fpNew = fopen(newPath, "rb");
+    FILE *fpOld = NULL;
+
+    fpOld = fopen(oldPath, "rb");
 
     if (fpOld == NULL) {
-        printf("Failed reading old file!\n");
+        printf("Failed opening old path!\n");
+        fclose(fpOld);
         exit(1);
     }
 
+    FILE *fpNew = NULL;
+
+    fpNew = fopen(newPath, "rb");
+
     if (fpNew == NULL) {
-        printf("Failed reading new file!\n");
+        printf("Failed opening new path!\n");
+        fclose(fpNew);
         exit(1);
     }
 
@@ -122,8 +139,8 @@ difference_t *diffFilesFromPath(const char *oldPath, const char *newPath, const 
         exit(1);
     }
 
-    uint8_t *oldDataBuffer = readFile(fpOld, oldSize);
-    uint8_t *newDataBuffer = readFile(fpNew, newSize);
+    uint8_t *oldDataBuffer = readDataFromFD(fpOld);
+    uint8_t *newDataBuffer = readDataFromFD(fpNew);
 
     difference_t *differences = diff(oldDataBuffer, newDataBuffer, oldSize);
 
